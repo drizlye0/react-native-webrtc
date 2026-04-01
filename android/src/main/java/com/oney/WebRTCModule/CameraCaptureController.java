@@ -1,6 +1,8 @@
 package com.oney.WebRTCModule;
 
 import android.content.Context;
+import android.graphics.Rect;
+import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.util.Log;
 import android.util.Pair;
@@ -41,6 +43,7 @@ public class CameraCaptureController extends AbstractVideoCaptureController {
     private final Context context;
     private final CameraEnumerator cameraEnumerator;
     private ReadableMap constraints;
+    private Consumer<Float> zoomCallback;
 
     /**
      * The {@link CameraEventsHandler} used with
@@ -85,6 +88,27 @@ public class CameraCaptureController extends AbstractVideoCaptureController {
         WritableMap settings = super.getSettings();
         settings.putString("facingMode", isFrontFacing ? "user" : "environment");
         return settings;
+    }
+
+    @Override
+    public void setZoom(float zoomRatio, @Nullable Consumer<Exception> onFinishedCallback) {
+        if (zoomRatio < 1.0f) {
+            zoomRatio = 1.0f;
+        }
+
+        this.targetZoom = zoomRatio;
+
+        if (zoomCallback != null) {
+            zoomCallback.accept(zoomRatio);
+        }
+
+        if (onFinishedCallback != null) {
+            onFinishedCallback.accept(null);
+        }
+    }
+
+    public void setZoomCallback(Consumer<Float> callback) {
+        this.zoomCallback = callback;
     }
 
     @Override

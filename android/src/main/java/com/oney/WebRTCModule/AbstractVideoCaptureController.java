@@ -18,6 +18,9 @@ public abstract class AbstractVideoCaptureController {
     protected int actualHeight;
     protected int actualFps;
 
+    protected float targetZoom = 1.0f;
+    protected float actualZoom = 1.0f;
+
     /**
      * {@link VideoCapturer} which this controller manages.
      */
@@ -58,6 +61,17 @@ public abstract class AbstractVideoCaptureController {
 
     public int getFrameRate() {
         return actualFps;
+    }
+
+    public float getZoom() {
+        return actualZoom;
+    }
+
+    public void setZoom(float zoomRatio, @Nullable Consumer<Exception> onFinishedCallback) {
+        if (onFinishedCallback != null) {
+            onFinishedCallback.accept(
+                    new UnsupportedOperationException("This video track does not support zoom."));
+        }
     }
 
     public WritableMap getSettings() {

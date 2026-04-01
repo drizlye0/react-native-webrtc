@@ -3,9 +3,19 @@ package com.oney.WebRTCModule;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Rect;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.media.projection.MediaProjectionManager;
+import android.os.Handler;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.Range;
+import android.view.Surface;
 
 import androidx.core.util.Consumer;
 
@@ -23,6 +33,7 @@ import com.oney.WebRTCModule.videoEffects.ProcessorProvider;
 import com.oney.WebRTCModule.videoEffects.VideoEffectProcessor;
 import com.oney.WebRTCModule.videoEffects.VideoFrameProcessor;
 
+import org.webrtc.CameraEnumerationAndroid.CaptureFormat;
 import org.webrtc.*;
 
 import java.util.ArrayList;
@@ -262,6 +273,153 @@ class GetUserMediaImpl {
         } else {
             promise.reject(new Exception("Camera track not found!"));
         }
+    }
+
+    void setZoom(String trackId, float zoomLevel, Promise promise) {
+        TrackPrivate track = tracks.get(trackId);
+        if (track == null || track.videoCaptureController == null) {
+            promise.reject(new Exception("Video track not found!"));
+            return;
+        }
+
+        if (!(track.videoCaptureController instanceof CameraCaptureController)) {
+            promise.reject(new Exception("Only camera tracks support zoom!"));
+            return;
+        }
+
+        CameraCaptureController controller = (CameraCaptureController) track.videoCaptureController;
+
+        controller.setZoomCallback(newZoomLevel -> {
+            try {
+                setZoomInternal(track.videoCaptureController.getVideoCapturer(), newZoomLevel);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to set zoom", e);
+            }
+        });
+
+        controller.setZoom(zoomLevel, e -> {
+            if (e != null) {
+                promise.reject(e);
+            } else {
+                promise.resolve(controller.getSettings());
+            }
+        });
+    }
+
+    private void setZoomInternal(VideoCapturer videoCapturer, float zoomLevel) {
+        if (videoCapturer instanceof Camera2Capturer) {
+            setCamera2Zoom((Camera2Capturer) videoCapturer, zoomLevel);
+        } else if (videoCapturer instanceof Camera1Capturer) {
+            setCamera1Zoom((Camera1Capturer) videoCapturer, zoomLevel);
+        }
+    }
+
+    private void setCamera2Zoom(Camera2Capturer capturer, float zoomLevel) {
+        try {
+            CameraManager cameraManager = (CameraManager) reactContext.getSystemService(Context.CAMERA_SERVICE);
+
+            Object session = getPrivateProperty(capturer.getClass().getSuperclass(), capturer, "currentSession");
+            if (session == null) {
+                Log.w(TAG, "Camera2 session is null, cannot set zoom");
+                return;
+            }
+
+            CameraCaptureSession captureSession = (CameraCaptureSession)
+                    getPrivateProperty(session.getClass(), session, "captureSession");
+            CameraDevice cameraDevice = (CameraDevice)
+                    getPrivateProperty(session.getClass(), session, "cameraDevice");
+            Object captureFormatObj = getPrivateProperty(session.getClass(), session, "captureFormat");
+            Integer fpsUnitFactor = (Integer) getPrivateProperty(session.getClass(), session, "fpsUnitFactor");
+            Object surfaceObj = getPrivateProperty(session.getClass(), session, "surface");
+            Handler cameraThreadHandler = (Handler) getPrivateProperty(session.getClass(), session, "cameraThreadHandler");
+
+            if (captureSession == null || cameraDevice == null || surfaceObj == null || captureFormatObj == null || fpsUnitFactor == null || cameraThreadHandler == null) {
+                Log.w(TAG, "Cannot get Camera2 internal properties for zoom");
+                return;
+            }
+
+            CaptureFormat captureFormat = (CaptureFormat) captureFormatObj;
+            Surface surface = (Surface)surfaceObj;
+
+            final CaptureRequest.Builder captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+
+            CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraDevice.getId());
+            Rect sensorSize = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+            Float maxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+
+            if (sensorSize != null && maxZoom != null) {
+                float desiredZoom = Math.max(1.0f, Math.min(zoomLevel, maxZoom));
+                float ratio = 1.0f / desiredZoom;
+
+                int croppedWidth = (int) ((sensorSize.width() - sensorSize.width() * ratio) / 2);
+                int croppedHeight = (int) ((sensorSize.height() - sensorSize.height() * ratio) / 2);
+
+                Rect desiredRegion = new Rect(
+                        croppedWidth,
+                        croppedHeight,
+                        sensorSize.width() - croppedWidth,
+                        sensorSize.height() - croppedHeight
+                );
+
+                captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, desiredRegion);
+            }
+
+            captureRequestBuilder.set(
+                    CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                    new Range<>(
+                            captureFormat.framerate.min / fpsUnitFactor,
+                            captureFormat.framerate.max / fpsUnitFactor
+                    )
+            );
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+            captureRequestBuilder.addTarget(surface);
+
+            captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, cameraThreadHandler);
+
+            Log.d(TAG, "Camera2 zoom set to: " + zoomLevel);
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "CameraAccessException while setting zoom", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set Camera2 zoom", e);
+        }
+    }
+
+    private void setCamera1Zoom(Camera1Capturer capturer, float zoomLevel) {
+        try {
+            Object session = getPrivateProperty(capturer.getClass().getSuperclass(), capturer, "currentSession");
+            if (session == null) {
+                Log.w(TAG, "Camera1 session is null, cannot set zoom");
+                return;
+            }
+
+            android.hardware.Camera camera = (android.hardware.Camera)
+                    getPrivateProperty(session.getClass(), session, "camera");
+
+            if (camera == null) {
+                Log.w(TAG, "Camera1 camera is null, cannot set zoom");
+                return;
+            }
+
+            android.hardware.Camera.Parameters params = camera.getParameters();
+            if (params.isZoomSupported()) {
+                int maxZoom = params.getMaxZoom();
+                int desiredZoom = (int) Math.max(0, Math.min(zoomLevel, maxZoom));
+                params.setZoom(desiredZoom);
+                camera.setParameters(params);
+                Log.d(TAG, "Camera1 zoom set to: " + desiredZoom);
+            } else {
+                Log.w(TAG, "Camera1 zoom not supported");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set Camera1 zoom", e);
+        }
+    }
+
+    private Object getPrivateProperty(Class<?> clazz, Object instance, String fieldName) throws Exception {
+        java.lang.reflect.Field field = clazz.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(instance);
     }
 
     void getDisplayMedia(Promise promise) {
