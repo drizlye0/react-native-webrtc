@@ -226,6 +226,21 @@ export default class MediaStreamTrack extends EventTarget<MediaStreamTrackEventM
   }
 
   /**
+   * Private API for getting the max zoom level of video track
+   */
+  async _getMaxZoomLevel(): Promise<number> {
+    if (this.remote) {
+      throw new Error("Not implemented for remote tracks");
+    }
+
+    if (this.kind !== "video") {
+      throw new Error("Only implemented for video tracks");
+    }
+
+    return await WebRTCModule.mediaStreamTrackGetMaxZoomLevel(this.id);
+  }
+
+  /**
    * Applies a new set of constraints to the track.
    *
    * @param constraints An object listing the constraints

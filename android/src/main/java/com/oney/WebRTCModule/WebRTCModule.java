@@ -897,6 +897,18 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void mediaStreamTrackGetMaxZoomLevel(String id, Promise promise) {
+      ThreadUtils.runOnExecutor(() -> {
+        MediaStreamTrack track = getLocalTrack(id);
+        if (track !=  null) {
+          getUserMediaImpl.getMaxZoomLevel(id, promise);
+        }else {
+          promise.reject(new Exception("mediaStreamTrackGetMaxZoom() could not find track " + id));
+        }
+      });
+    }
+
+    @ReactMethod
     public void mediaStreamTrackSetVolume(int pcId, String id, double volume) {
         ThreadUtils.runOnExecutor(() -> {
             MediaStreamTrack track = getTrack(pcId, id);

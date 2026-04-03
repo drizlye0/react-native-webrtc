@@ -15,6 +15,7 @@ import android.os.Handler;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Range;
+import android.hardware.Camera;
 import android.view.Surface;
 
 import androidx.core.util.Consumer;
@@ -393,7 +394,7 @@ class GetUserMediaImpl {
                 return;
             }
 
-            android.hardware.Camera camera = (android.hardware.Camera)
+            Camera camera = (Camera)
                     getPrivateProperty(session.getClass(), session, "camera");
 
             if (camera == null) {
@@ -401,7 +402,7 @@ class GetUserMediaImpl {
                 return;
             }
 
-            android.hardware.Camera.Parameters params = camera.getParameters();
+            Camera.Parameters params = camera.getParameters();
             if (params.isZoomSupported()) {
                 int maxZoom = params.getMaxZoom();
                 int desiredZoom = (int) Math.max(0, Math.min(zoomLevel, maxZoom));
@@ -413,6 +414,82 @@ class GetUserMediaImpl {
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to set Camera1 zoom", e);
+        }
+    }
+
+    public void getMaxZoomLevel(String trackId, Promise promise) {
+        TrackPrivate track = tracks.get(trackId);
+        if (track == null || track.videoCaptureController == null) {
+            promise.reject(new Exception("Video track not found!"));
+            return;
+        }
+
+        if (!(track.videoCaptureController instanceof CameraCaptureController)) {
+            promise.reject(new Exception("Only camera tracks support zoom!"));
+            return;
+        }
+
+        CameraCaptureController controller = (CameraCaptureController) track.videoCaptureController;
+        VideoCapturer videoCapturer = controller.getVideoCapturer();
+
+        if (videoCapturer instanceof Camera2Capturer) {
+            try {
+                Camera2Capturer capturer = (Camera2Capturer) videoCapturer;
+                CameraManager cameraManager = (CameraManager) reactContext.getSystemService(Context.CAMERA_SERVICE);
+
+                Object session = getPrivateProperty(capturer.getClass().getSuperclass(), capturer, "currentSession");
+                if (session == null) {
+                    promise.reject(new Exception("Camera2 session is null"));
+                    return;
+                }
+
+                CameraDevice cameraDevice = (CameraDevice) getPrivateProperty(session.getClass(), session, "cameraDevice");
+                if (cameraDevice == null) {
+                    promise.reject(new Exception("Camera2 camera device is null"));
+                    return;
+                }
+
+                CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraDevice.getId());
+                Float maxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+
+                if (maxZoom == null) {
+                    promise.reject(new Exception("Max zoom not available"));
+                    return;
+                }
+
+                promise.resolve(maxZoom.doubleValue());
+            } catch (Exception e) {
+                promise.reject(e);
+            }
+        } else if (videoCapturer instanceof Camera1Capturer) {
+            try {
+                Camera1Capturer capturer = (Camera1Capturer) videoCapturer;
+
+                Object session = getPrivateProperty(capturer.getClass().getSuperclass(), capturer, "currentSession");
+                if (session == null) {
+                    promise.reject(new Exception("Camera1 session is null"));
+                    return;
+                }
+
+                Camera camera = (Camera) getPrivateProperty(session.getClass(), session, "camera");
+                if (camera == null) {
+                    promise.reject(new Exception("Camera1 camera is null"));
+                    return;
+                }
+
+                Camera.Parameters params = camera.getParameters();
+                if (!params.isZoomSupported()) {
+                    promise.reject(new Exception("Zoom not supported"));
+                    return;
+                }
+
+                int maxZoom = params.getMaxZoom();
+                promise.resolve((double)maxZoom);
+            } catch (Exception e) {
+                promise.reject(e);
+            }
+        } else {
+            promise.reject(new Exception("Unsupported capturer type"));
         }
     }
 
