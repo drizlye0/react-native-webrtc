@@ -1,3 +1,19 @@
+# ATTENTION
+This repo is a fork that adds a camera zoom control ONLY FOR ANDROID. The mainly reason im not open a pull request to push the changes to 
+the main repository is because i dont plan mantain these changes for future updates to react native and Android Camera API.
+
+Usage:
+```
+// get local stream
+const stream = await mediaDevices.getUserMedia({...});
+
+// get max zoom level
+const maxLevel = await stream.getTracks().at(0)._getMaxZoomLevel();
+
+// set zoom level
+stream.getTracks().at(0)._setZoom(maxLevel * 0.2) // means 20% of maximum zoom level
+```
+
 [<img src="https://avatars.githubusercontent.com/u/42463376" alt="React Native WebRTC" style="height: 6em;" />](https://github.com/react-native-webrtc/react-native-webrtc)
 
 # React-Native-WebRTC
