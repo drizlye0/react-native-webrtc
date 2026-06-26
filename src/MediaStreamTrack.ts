@@ -251,16 +251,18 @@ export default class MediaStreamTrack extends EventTarget<MediaStreamTrackEventM
    * constraints are cleared.
    */
   async applyConstraints(constraints?: MediaTrackConstraints): Promise<void> {
-    if (this.kind !== "video") {
-      throw new Error("Only implemented for video tracks");
+    if (this.kind !== 'video') {
+      throw new Error('Only implemented for video tracks');
+    }
+
+    // Preserve current facing mode when user doesn't specify one
+    if (constraints && !constraints?.facingMode && this._settings?.facingMode) {
+      constraints.facingMode = this._settings.facingMode;
     }
 
     const normalized = normalizeConstraints({ video: constraints ?? true });
 
-    this._settings = await WebRTCModule.mediaStreamTrackApplyConstraints(
-      this.id,
-      normalized.video
-    );
+    this._settings = await WebRTCModule.mediaStreamTrackApplyConstraints(this.id, normalized.video);
     this._constraints = constraints ?? {};
   }
 
