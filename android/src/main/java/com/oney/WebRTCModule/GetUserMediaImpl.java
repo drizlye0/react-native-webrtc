@@ -322,9 +322,9 @@ class GetUserMediaImpl {
 
     private void setCamera2Zoom(Camera2Capturer capturer, float zoomLevel) {
         try {
-            CameraManager cameraManager = (CameraManager) reactContext.getSystemService(Context.CAMERA_SERVICE);
+            CameraManager cameraManager = (CameraManager) getPrivateProperty(Camera2Capturer.class, capturer, "cameraManager");
 
-            Object session = getPrivateProperty(capturer.getClass().getSuperclass(), capturer, "currentSession");
+            Object session = getPrivateProperty(Camera2Capturer.class.getSuperclass(), capturer, "currentSession");
             if (session == null) {
                 Log.w(TAG, "Camera2 session is null, cannot set zoom");
                 return;
@@ -336,16 +336,15 @@ class GetUserMediaImpl {
                     getPrivateProperty(session.getClass(), session, "cameraDevice");
             Object captureFormatObj = getPrivateProperty(session.getClass(), session, "captureFormat");
             Integer fpsUnitFactor = (Integer) getPrivateProperty(session.getClass(), session, "fpsUnitFactor");
-            Object surfaceObj = getPrivateProperty(session.getClass(), session, "surface");
+            Surface surface = getPrivateProperty(session.getClass(), session, "surface");
             Handler cameraThreadHandler = (Handler) getPrivateProperty(session.getClass(), session, "cameraThreadHandler");
 
-            if (captureSession == null || cameraDevice == null || surfaceObj == null || captureFormatObj == null || fpsUnitFactor == null || cameraThreadHandler == null) {
+            if (captureSession == null || cameraDevice == null || surface == null || captureFormatObj == null || fpsUnitFactor == null || cameraThreadHandler == null) {
                 Log.w(TAG, "Cannot get Camera2 internal properties for zoom");
                 return;
             }
 
             CaptureFormat captureFormat = (CaptureFormat) captureFormatObj;
-            Surface surface = (Surface)surfaceObj;
 
             final CaptureRequest.Builder captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
 
