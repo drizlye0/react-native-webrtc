@@ -18,16 +18,16 @@ function App() {
   const stream = use(streamPromise);
 
   const increaseZoom = () => {
-    setZoom(zoom + 0.5);
-    stream.getTracks().at(0)?._setZoom(zoom);
+    setZoom(zoom + 1);
+    stream.getVideoTracks().at(0)?._setZoom(zoom)
   };
 
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <View style={styles.container}>
-        <Button title="increase zoom" onPress={increaseZoom} />
         <RTCView streamURL={stream.toURL()} style={{ flex: 1 }} />
+        <Button title="increase zoom" onPress={increaseZoom} />
       </View>
     </SafeAreaProvider>
   );
