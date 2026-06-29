@@ -336,7 +336,7 @@ class GetUserMediaImpl {
                     getPrivateProperty(session.getClass(), session, "cameraDevice");
             Object captureFormatObj = getPrivateProperty(session.getClass(), session, "captureFormat");
             Integer fpsUnitFactor = (Integer) getPrivateProperty(session.getClass(), session, "fpsUnitFactor");
-            Surface surface = getPrivateProperty(session.getClass(), session, "surface");
+            Surface surface = (Surface) getPrivateProperty(session.getClass(), session, "surface");
             Handler cameraThreadHandler = (Handler) getPrivateProperty(session.getClass(), session, "cameraThreadHandler");
 
             if (captureSession == null || cameraDevice == null || surface == null || captureFormatObj == null || fpsUnitFactor == null || cameraThreadHandler == null) {
